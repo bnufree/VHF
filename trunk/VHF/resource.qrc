@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/ico">
+        <file alias="edit">Resource/edit.png</file>
+        <file alias="mic">Resource/microphone.png</file>
+        <file alias="vol">Resource/volume.png</file>
+        <file alias="phoneColorful">Resource/phone.png</file>
+        <file alias="phoneBlack">Resource/phoneBlack.png</file>
+        <file alias="phoneBlue">Resource/phoneBlue.png</file>
+        <file alias="phoneWhite">Resource/phoneWhite.png</file>
+        <file alias="phoneFlat">Resource/phoneFlat.png</file>
+        <file alias="zchx">Resource/zchx.jpg</file>
+    </qresource>
+</RCC>
