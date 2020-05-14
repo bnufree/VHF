@@ -104,7 +104,7 @@ QLabel
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <widget class="RxButton" name="rxButton">
+      <widget class="QPushButton" name="rxButton">
        <property name="enabled">
         <bool>true</bool>
        </property>
@@ -339,13 +339,6 @@ QLabel
    </item>
   </layout>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>RxButton</class>
-   <extends>QPushButton</extends>
-   <header>rxbutton.h</header>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -4,33 +4,11 @@
 #include <QObject>
 #include <QTcpSocket>
 #include <QTimer>
+#include "vhfdata.h"
 
 #define PING_TIMER 5*1000   //定时PING延时
 #define PING_WAIT_TIME 3*1000  //PING等待连接时间
 #define AUTO_ENTER_TIMER 5*1000 //分机自动接入定时
-
-enum EXTENSION_STATUS
-{
-    UNAVAILABLE,
-    REGISTER,           //空闲状态
-    BUSY,
-    RINGING,
-};
-
-struct ExtensionData{
-    QString number;//分机号
-    QString username;//用户名
-    EXTENSION_STATUS status_int;//分机状态
-    QString address;//分机IP
-    int groupNo;//组号
-    QString meetingNo;//会议室号码
-    EXTENSION_STATUS  preStatus; //分机前一个状态
-    QString   status_str;
-    ExtensionData()
-    {
-        preStatus = UNAVAILABLE;
-    }
-};
 
 class Extension : public QObject
 {

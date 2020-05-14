@@ -33,6 +33,8 @@ LoginDialog::LoginDialog(QWidget *parent) :
     } 
 
     connect(ui->autoLoginCheckBox, &QCheckBox::stateChanged, [=](int state){if (state) ui->savePasswordCheckBox->setChecked(true);});
+    connect(NetWorker::instance(), SIGNAL(signalSendLoginResult(int)),
+            this, SLOT(slotRecvLoginResult(int)));
 }
 
 LoginDialog::~LoginDialog()
@@ -48,7 +50,14 @@ void LoginDialog::onOkButtonClicked()
     QByteArray baMd5 = QCryptographicHash::hash(password.toLocal8Bit(), QCryptographicHash::Md5);
     passwordMd5.append(baMd5.toHex().toLower());
 
-    int errorNo = NetWorker::instance()->Login(username, passwordMd5);
+    NetWorker::instance()->signalLogin(username, passwordMd5);
+}
+
+void LoginDialog::slotRecvLoginResult(int errorNo)
+{
+    QString username = ui->usernameEdit->text().trimmed();
+    QString password = ui->passwordEdit->text().trimmed();
+
     qDebug() <<"errorNo:"<<errorNo;
     if (!errorNo)
     {
@@ -71,19 +80,13 @@ void LoginDialog::onOkButtonClicked()
     }
     else
     {
-        qDebug()<<"!!!!!!!!!!!!!!!!!!";
-#ifdef CD_TEST
-        accept();
-        qDebug()<<"test without login. accept now !!!!!!!";
-#else
         ui->errorLabel->setText(QStringLiteral("%1").arg(NetWorker::errorNo2String(errorNo)));
         if(errorNo == 1 && mResend && !mCancel)
         {
             onOkButtonClicked();
         } else {
             reject();
-        }        
-#endif
+        }
 
     }
 }

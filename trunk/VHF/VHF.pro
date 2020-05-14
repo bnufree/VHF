@@ -82,7 +82,8 @@ HEADERS += \
     centercontrolthread.h \
     zchxvhfaudioplaythread.h \
     watchdogthread.h \
-    rxbutton.h
+    rxbutton.h \
+    vhfdata.h
 
 FORMS += \
     logindialog.ui \

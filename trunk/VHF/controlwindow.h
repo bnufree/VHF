@@ -36,7 +36,6 @@ public:
 
 public slots:
     void slotOpenTest();
-    void QueryExtensionNumber(const QByteArray& recv, bool sts);
     void Refresh();
 	void on_DeleteBtn_clicked();
     void on_ChangeBtn_clicked();
@@ -53,6 +52,7 @@ public slots:
     void slotCloseStation(const QString& source, bool sts);
     void slotPlayTextAudio(const QString& id, const QString& text);
     void slotRestartApp();
+    void slotRecvExtensionList(const ExtensionDataList& list,int code);
 
 protected:
     virtual void closeEvent(QCloseEvent* event);
@@ -71,10 +71,10 @@ private slots:
 
 private:
     void CreatView();
-    void AddSingleWidget(QJsonArray &array);
+    void AddSingleWidget(const ExtensionDataList& list);
     void DeleteWidget();
     void AddGroupWidget();
-    void UpdateStatus(QJsonArray &array);
+    void UpdateStatus(const ExtensionDataList& list);
     //int  TextToVideo(const int volume, const WCHAR* wChar, const LPCWSTR &filename);
     void PromptVideo(const QStringList& phone_list, const QString& filename);
     QStringList getBroadCastExtensions(bool check = true);
@@ -87,7 +87,7 @@ private:
     GroupControlWidget* groupControlWidget = nullptr;
     int                                 mFileTimeLen;
     QStandardItemModel*                 m_pExtensionModel; //分机列表树形结构
-    zchxDataAsyncWorker*                mDataAsyncWorker;
+//    zchxDataAsyncWorker*                mDataAsyncWorker;
     JavaSubInfoThread*                  mJavaInfoThread;
     zchxVhfConvertThread*               mTaskMgrCenter;
 };

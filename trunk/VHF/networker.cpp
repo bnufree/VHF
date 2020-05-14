@@ -17,7 +17,7 @@
 #include "inifile.h"
 
 //心跳包使得token的时间延长30分钟，所以心跳时间设定为20分钟
-#define HEARTBEAT_TIMER 60*1000*2  //心跳包间隔时间，默认10秒
+#define HEARTBEAT_TIMER 30*1000  //心跳包间隔时间，默认10秒
 NetWorker* NetWorker::minstance = nullptr;
 NetWorker::MGarbage NetWorker::Garbage;
 
@@ -32,8 +32,9 @@ public:
         QString apiVersion = IniFile::instance()->GetApiVersion();
         m_ListenPort = IniFile::instance()->GetListenPort();
         m_Url = QString("http://%1:%2/api/%3/").arg(m_ServerAddr).arg(ippbxServerPort).arg(apiVersion);
-
-        //获取本机IP地址
+        m_ApiToken.clear();
+        m_timer = 0;
+		 //获取本机IP地址
         QList<QHostAddress> ip_list = QNetworkInterface::allAddresses();
         foreach(QHostAddress ip_item, ip_list)
         {
@@ -56,16 +57,14 @@ public:
     }
 
     QNetworkAccessManager* manager;
-    QTcpServer* listenServer;
-    QTimer* timer;
-
+	QTcpServer* listenServer;
     QString m_ServerAddr;
-    QString m_ListenPort;
-    QString localhost_address_;
+	QString m_ListenPort;
+	QString localhost_address_;
     QString m_ApiToken;
     QString m_Url;
     QString ippbxServerPort;
-    bool bHeartbeat = true;
+    QTimer* m_timer;
 };
 
 NetWorker* NetWorker::instance()
@@ -76,14 +75,14 @@ NetWorker* NetWorker::instance()
 
 NetWorker::NetWorker(QObject *parent) :
     QObject(parent),
+    mIsOK(false),
     d(new NetWorker::NetCore(this))
 {
-    connect(d->manager, &QNetworkAccessManager::finished,
-            this, &NetWorker::finished);
+    qRegisterMetaType<ExtensionDataList>("const ExtensionDataList&");
 
-    d->listenServer = new QTcpServer(this);
-    connect(d->listenServer, &QTcpServer::newConnection, this, &NetWorker::new_connection);
-    if (!d->listenServer->listen(QHostAddress::Any, quint16(d->m_ListenPort.toInt())))
+	d->listenServer = new QTcpServer(this);
+    connect(d->listenServer, &QTcpServer::newConnection, this, &NetWorker::slotNewReportConnection, Qt::DirectConnection);
+    if (!d->listenServer->listen(QHostAddress::AnyIPv4, quint16(d->m_ListenPort.toInt())))
     {
         qDebug() << "Listen failed: " << d->listenServer->errorString();
     }
@@ -92,34 +91,72 @@ NetWorker::NetWorker(QObject *parent) :
         qDebug() << "Listen successfully!"<<d->listenServer->serverAddress().toString();
     }
 
-    d->timer = new QTimer(this);
-    connect(d->timer, &QTimer::timeout, this, &NetWorker::signal_heartbeat_timeup);
-    connect(this, SIGNAL(signalPlay(QString,QString,bool)), this, SLOT(slotPlay(QString,QString,bool)));
+    connect(this, SIGNAL(signalLogin(QString,QString)),
+            this, SLOT(slotLogin(QString,QString)));
+    connect(this, SIGNAL(signalLogout()),
+            this, SLOT(slotLogout()));
+    connect(this, SIGNAL(signalQueryExtension()),
+            this, SLOT(slotQueryExtensionList()));
+    connect(this, SIGNAL(signalDialUpExtension(QString,QString)),
+            this, SLOT(slotDialUpExtension(QString,QString)));
+    connect(this, SIGNAL(signalDialUpOutto(QString,QString)),
+            this, SLOT(slotDialUpOutto(QString,QString)));
+    connect(this, SIGNAL(signalHangUpExtension(QString)),
+            this, SLOT(slotHangUpExtension(QString)));
+    connect(this, SIGNAL(signalUpdateExtensionUsername(QString,QString)),
+            this, SLOT(slotUpdateExtensionUsername(QString,QString)));
+    connect(this, SIGNAL(signalPrompt(QString,QString)),
+            this, SLOT(slotPrompt(QString,QString)));
+    connect(this, SIGNAL(signalQueryExtensionStatus(QString)),
+            this, SLOT(slotQueryExtensionStatus(QString)));
 
+    d->m_timer = new QTimer();
+    connect(d->m_timer, SIGNAL(timeout()),
+            this, SLOT(slotHeartBeat()));
+    this->moveToThread(&mWorkThread);
+    mWorkThread.start();
+//    startHeartTimer();
 }
 
 NetWorker::~NetWorker()
 {
-    if(d->listenServer)
+	if(d->listenServer)
     {
         d->listenServer->close();
         d->listenServer->deleteLater();
         qDebug()<<"listen server closed...";
     }
+    if(mWorkThread.isRunning()) mWorkThread.quit();
     delete d;
     d = nullptr;
+    qDebug()<<__FUNCTION__;
 }
 
 void NetWorker::startHeartTimer()
 {
-    if(d->timer)
+    qDebug()<<"start heart timer now...";
+    if(d->m_timer)
     {
-        d->timer->start(HEARTBEAT_TIMER);
+        d->m_timer->start(HEARTBEAT_TIMER);
+        qDebug()<<"timer started..."<<d->m_timer->interval()<<QThread::currentThread()<<d->m_timer->thread()<<(&mWorkThread);
     }
 }
 
+void NetWorker::slotHeartBeat()
+{
+    QJsonObject obj;
+    obj.insert("ipaddr", d->m_ServerAddr);
+    obj.insert("port", d->m_ListenPort);
+    QJsonDocument doc;
+    doc.setObject(obj);
+    QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-void NetWorker::new_connection()
+    sendSyncRequest("heartbeat", data, true);
+}
+
+
+
+void NetWorker::slotNewReportConnection()
 {
     qDebug()<<"a new center connected now..";
     //获取连接
@@ -127,7 +164,7 @@ void NetWorker::new_connection()
     if(socket)
     {
         //连接信号槽，已读取新数据
-        connect(socket, &QTcpSocket::readyRead, this, &NetWorker::recieve_data);
+        connect(socket, &QTcpSocket::readyRead, this, &NetWorker::slotRecvReportData);
         connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
         qDebug()<<"center server:"<<socket->peerAddress().toString()<<socket->peerName();
     } else
@@ -139,7 +176,7 @@ void NetWorker::new_connection()
 /**
  * @brief NetWorker::recieve_data 接收到系统报告
  */
-void NetWorker::recieve_data()
+void NetWorker::slotRecvReportData()
 {
     QByteArray buffer;
     //读取缓冲区数据
@@ -161,12 +198,12 @@ void NetWorker::recieve_data()
         {
             emit signal_extension_status_changed(json_object.value("extension").toString(),
                                                  json_object.value("status").toString());
-        }
+        }/*
         //配置变更
         else if (action == "ConfigChange")
         {
             emit SignalConfigChanged(json_object.value("extid").toString());
-        }
+        }*/
     }
 }
 
@@ -181,8 +218,10 @@ void NetWorker::setToken(QString token)
  * @param password 经过MD5加密后的密码
  * @return errorNo 错误码，0为成功，1为无错误码失败
  */
-int NetWorker::Login(const QString username, QString password)
+void NetWorker::slotLogin(const QString username, QString password)
 {
+    mUserName = username;
+    mPassWord = password;
     d->m_ApiToken.clear();
     QJsonObject obj;
     obj.insert("username", username);
@@ -193,49 +232,193 @@ int NetWorker::Login(const QString username, QString password)
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    QByteArray recv = sendSyncRequest("login", data);
+    QByteArray recv = sendSyncRequest("login", data, false);
 
     int errNo = judgeStatus(recv);
     if(errNo == 0)
     {
-        mUserName = username;
-        mPassWord = password;
+
+        mIsOK = true;
+    } else
+    {
+        mIsOK = false;
     }
 
-    return errNo;
+    emit signalSendLoginResult(errNo);
 }
 
 /**
  * @brief NetWorker::logout 登出接口，未接收返回值
  */
-void NetWorker::Logout()
+void NetWorker::slotLogout()
 {
     sendAsyncRequest("logout");
 //    sendSyncRequest("logout");
 }
 
-/**
- * @brief NetWorker::heartbeat 发送心跳包，异步通信
- */
-void NetWorker::SendHeartbeat()
-{
-    QJsonObject obj;
-    obj.insert("ipaddr", d->m_ServerAddr);
-    obj.insert("port", d->m_ListenPort);
-    QJsonDocument doc;
-    doc.setObject(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    sendAsyncRequest("heartbeat", data);
-}
 
 /**
  * @brief NetWorker::queryDeviceList 查询分机信息，异步通信
  */
-int NetWorker::QueryExtensionList(QByteArray &recv)
+void NetWorker::slotQueryExtensionList()
 {
-    recv = sendSyncRequest("extensionlist/query");
-    return judgeStatus(recv);
+    sendAsyncRequest("extensionlist/query");
+#if 0
+    qDebug()<<__FUNCTION__;
+    ExtensionDataList resList;
+    int query_code = Extension_Query_Failed;
+    QByteArray recv = sendSyncRequest("extensionlist/query", QByteArray(), false);
+    int err = judgeStatus(recv);
+    if(err == 1) query_code = Extension_Query_TimeOut;
+
+    QJsonParseError ParseError;
+    QJsonDocument JDocument = QJsonDocument::fromJson(recv,&ParseError);
+    if (ParseError.error == QJsonParseError::NoError && JDocument.isObject())
+    {
+        QJsonObject Json = JDocument.object();
+        if (Json.value("status").toString() == "Failed")
+        {
+            query_code = Extension_Query_Failed;
+        }
+        else
+        {
+            query_code = ExtenSion_Query_Success;
+        }
+
+        if (Json.value("extlist").isArray())
+        {
+            QJsonArray array = Json.value("extlist").toArray();
+            for (int i=0; i<array.size(); i++)
+            {
+                QJsonObject obj = array.at(i).toObject();
+                ExtensionData extensionData;
+                extensionData.number = obj.value("extnumber").toString();
+                extensionData.username = obj.value("username").toString();
+                QString status = obj.value("status").toString();
+                if (status == "Busy")
+                    extensionData.status_int = EXTENSION_STATUS::BUSY;
+                else if (status == "Registered")
+                    extensionData.status_int = EXTENSION_STATUS::REGISTER;
+                else if (status == "Ringing")
+                    extensionData.status_int = EXTENSION_STATUS::RINGING;
+                else
+                    extensionData.status_int = EXTENSION_STATUS::UNAVAILABLE;
+                extensionData.status_str = status;
+                qDebug()<<extensionData.number<<extensionData.status_str;
+                resList.append(extensionData);
+            }
+        }
+    }
+
+    emit signalSendExtensionList(resList, query_code);
+#endif
+}
+
+QString NetWorker::queryExtensionStatus(const QString &number)
+{
+    QString status;
+    QJsonObject obj;
+    obj.insert("extid", number);
+    QJsonDocument doc;
+    doc.setObject(obj);
+    QByteArray data = doc.toJson(QJsonDocument::Compact);
+
+    QByteArray recv = sendSyncRequest("extension/query", data, false);
+    QJsonParseError ParseError;
+    QJsonDocument JDocument = QJsonDocument::fromJson(recv,&ParseError);
+    if (ParseError.error == QJsonParseError::NoError && JDocument.isObject())
+    {
+        QJsonObject Json = JDocument.object();
+        if (Json.value("status").toString() != "Failed")
+        {
+
+            if (Json.value("extinfos").isArray())
+            {
+                QJsonArray array = Json.value("extinfos").toArray();
+                for (int i=0; i<array.size(); i++)
+                {
+                    QJsonObject obj = array.at(i).toObject();
+                    status =  obj.value("status").toString();
+                    break;
+                }
+            }
+        }
+    }
+
+
+    return status;
+}
+
+void NetWorker::slotQueryExtensionStatus(const QString &number)
+{
+#if 0
+    QString status = queryExtensionStatus(number);
+    if(!status.isEmpty())
+    {
+        emit signal_extension_status_changed(number, status);
+    }
+#endif
+    QJsonObject obj;
+    obj.insert("extid", number);
+    QJsonDocument doc;
+    doc.setObject(obj);
+    QByteArray data = doc.toJson(QJsonDocument::Compact);
+    sendAsyncRequest("extension/query", data);
+}
+
+void NetWorker::slotReadyReadServerData()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    if(!reply) return;
+    QByteArray recv = reply->readAll();
+    QJsonParseError ParseError;
+    QJsonDocument JDocument = QJsonDocument::fromJson(recv,&ParseError);
+    if (ParseError.error == QJsonParseError::NoError){
+        if(JDocument.isObject()){
+            QJsonObject Json = JDocument.object();
+            if (Json.value("status").toString() == "Failed") return;
+            if(Json.contains("extinfos"))
+            {
+                //查询的分机状态信息
+                QJsonArray array = Json.value("extinfos").toArray();
+                for (int i=0; i<array.size(); i++)
+                {
+                    QJsonObject obj = array.at(i).toObject();
+                    QString status =  obj.value("status").toString();
+                    QString number = obj.value("extnumber").toString();
+                    emit signal_extension_status_changed(number, status);
+                    break;
+                }
+            } else if(Json.contains("extlist"))
+            {
+                ExtensionDataList list;
+                QJsonArray array = Json.value("extlist").toArray();
+                for (int i=0; i<array.size(); i++)
+                {
+                    QJsonObject obj = array.at(i).toObject();
+                    ExtensionData extensionData;
+                    extensionData.number = obj.value("extnumber").toString();
+                    extensionData.username = obj.value("username").toString();
+                    QString status = obj.value("status").toString();
+                    if (status == "Busy")
+                        extensionData.status_int = EXTENSION_STATUS::BUSY;
+                    else if (status == "Registered")
+                        extensionData.status_int = EXTENSION_STATUS::REGISTER;
+                    else if (status == "Ringing")
+                        extensionData.status_int = EXTENSION_STATUS::RINGING;
+                    else
+                        extensionData.status_int = EXTENSION_STATUS::UNAVAILABLE;
+                    extensionData.status_str = status;
+                    qDebug()<<extensionData.number<<extensionData.status_str;
+                    list.append(extensionData);
+                }
+                int code = list.size() > 0 ? ExtenSion_Query_Success : Extension_Query_Failed;
+                emit signalSendExtensionList(list, code);
+            }
+        }
+    }
+    reply->deleteLater();
 }
 
 /**
@@ -244,7 +427,7 @@ int NetWorker::QueryExtensionList(QByteArray &recv)
  * @param callee 被叫分机号
  * @return errorNo 错误码，0为成功，1为无错误码失败
  */
-int NetWorker::DialUpExtension(const QString caller, const QString callee)
+void NetWorker::slotDialUpExtension(const QString caller, const QString callee)
 {
     QJsonObject obj;
     obj.insert("caller", caller);
@@ -254,9 +437,7 @@ int NetWorker::DialUpExtension(const QString caller, const QString callee)
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    QByteArray recv = sendSyncRequest("extension/dial_extension", data);
-
-    return judgeStatus(recv);
+    sendAsyncRequest("extension/dial_extension", data);
 }
 
 /**
@@ -265,7 +446,7 @@ int NetWorker::DialUpExtension(const QString caller, const QString callee)
  * @param outto 被叫外线号
  * @return 错误码，0为成功，1为无错误码失败
  */
-int NetWorker::DialUpOutto(const QString caller, const QString outto)
+void NetWorker::slotDialUpOutto(const QString caller, const QString outto)
 {
 
     QJsonObject obj;
@@ -276,9 +457,7 @@ int NetWorker::DialUpOutto(const QString caller, const QString outto)
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    QByteArray recv = sendSyncRequest("extension/dial_outbound", data);
-
-    return judgeStatus(recv);
+    sendAsyncRequest("extension/dial_outbound", data);
 }
 
 /**
@@ -286,7 +465,7 @@ int NetWorker::DialUpOutto(const QString caller, const QString outto)
  * @param extid 挂断分机号
  * @return errorNo 错误码，0为成功，1为超时，2为无错误码失败
  */
-int NetWorker::HangUpExtension(const QString extid)
+void NetWorker::slotHangUpExtension(const QString extid)
 {
     QJsonObject obj;
     obj.insert("extid", extid);
@@ -294,9 +473,7 @@ int NetWorker::HangUpExtension(const QString extid)
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    QByteArray recv = sendSyncRequest("extension/hangup", data);
-
-    return judgeStatus(recv);
+    sendAsyncRequest("extension/hangup", data);
 }
 
 /**
@@ -305,7 +482,7 @@ int NetWorker::HangUpExtension(const QString extid)
  * @param username 用户名
  * @return 错误码
  */
-int NetWorker::UpdateExtensionUsername(const QString extid, const QString username)
+void NetWorker::slotUpdateExtensionUsername(const QString extid, const QString username)
 {
     QJsonObject obj;
     obj.insert("extid", extid);
@@ -313,15 +490,7 @@ int NetWorker::UpdateExtensionUsername(const QString extid, const QString userna
     QJsonDocument doc;
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-#if 1
-    QByteArray recv = sendSyncRequest("extension/update", data);
-
-    return judgeStatus(recv);
-#else
     sendAsyncRequest("extension/update", data);
-    return 0;
-#endif
 }
 
 /**
@@ -331,8 +500,7 @@ int NetWorker::UpdateExtensionUsername(const QString extid, const QString userna
  */
 int NetWorker::judgeStatus(const QByteArray recv)
 {
-    if (recv.isEmpty())
-        return 1;
+    if (recv.isEmpty())   return 1;
     QJsonParseError error;
     int errorNo = 0;
     QJsonDocument doc = QJsonDocument::fromJson(recv, &error);
@@ -371,7 +539,7 @@ int NetWorker::judgeStatus(const QByteArray recv)
  * @param data json格式数据
  * @return 接口返回值
  */
-QByteArray NetWorker::sendSyncRequest(const QString api, const QByteArray data)
+QByteArray NetWorker::sendSyncRequest(const QString api, const QByteArray data, bool relogin)
 {
 //    d->timer->stop();
 //    d->timer->start(HEARTBEAT_TIMER);
@@ -406,32 +574,28 @@ QByteArray NetWorker::sendSyncRequest(const QString api, const QByteArray data)
     timeout_timer->start(REQUEST_TIMEOUT);
     eventloop.exec();
 
-    if (api == "heartbeat")
-    {
-        if (!reply->isReadable() || !reply->isFinished())
+    if (!reply->isReadable() || !reply->isFinished())
+    {       
+//        emit SignalTimeout();
+        reply->deleteLater();
+        qDebug()<<"operation time out..."<<api;
+        if(mIsOK)
         {
-            qDebug() << "----------------------------heartbeat timeout-----------------";
-            d->bHeartbeat = false;
-            emit SignalTimeout();
-            reply->deleteLater();
-            return QByteArray();
+            mIsOK = false;
+            if(relogin)
+            {
+                emit signalLogin(mUserName, mPassWord);
+            }
         }
 
-        if (!d->bHeartbeat)
-        {
-            qDebug() << "----------------------------PBX Reconnected now-----------------";
-            d->bHeartbeat = true;
-            emit SignalReconnected();
-        }
+
+        return QByteArray();
     }
-    else
+    if(mIsOK == false)
     {
-        if (!reply->isReadable() || !reply->isFinished())
-        {
-            qDebug() << "operation timeout";
-            reply->deleteLater();
-            return QByteArray();
-        }
+        mIsOK = true;
+        emit SignalReconnected();
+        emit signalQueryExtension();
     }
 
     QByteArray recv = reply->readAll();
@@ -461,37 +625,22 @@ void NetWorker::sendAsyncRequest(const QString api, const QByteArray data)
     QNetworkRequest request;
     request.setUrl(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QNetworkReply *reply = 0;
 
     if (data.isEmpty())
     {
         qDebug() << endl << url.toString() << endl;
-        d->manager->get(request);
+        reply =  d->manager->get(request);
     }
     else
     {
         qDebug() << endl << url.toString() << QString(data) << endl;
-        d->manager->post(request, data);
+        reply = d->manager->post(request, data);
     }
+
+    connect(reply, SIGNAL(finished()), this, SLOT(slotReadyReadServerData()));
 }
 
-/**
- * @brief NetWorker::send_heartbeat 发送心跳包
- * @return 错误码
- */
-int NetWorker::send_heartbeat()
-{
-    QJsonObject obj;
-    obj.insert("ipaddr", d->localhost_address_);
-    obj.insert("port", d->m_ListenPort);
-//    qDebug()<<"ipaddr:"<<d->localhost_address_<<"port:"<<d->m_ListenPort;
-
-    QJsonDocument doc;
-    doc.setObject(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-    QByteArray recv = sendSyncRequest("heartbeat", data);
-
-    return judgeStatus(recv);
-}
 
 /**
  * @brief NetWorker::errorNo2String 错误码转为错误信息
@@ -608,7 +757,7 @@ QString NetWorker::errorNo2String(int errorNo)
  * @param extid 分机号  prompt 自定义音乐
  * @return errorNo 错误码，0为成功，1为超时，2为无错误码失败
  */
-int NetWorker::Prompt(const QString extid, const QString prompt , bool bSyn)
+void NetWorker::slotPrompt(const QString extid, const QString prompt)
 {
     QJsonObject obj;
     obj.insert("extid", extid);
@@ -619,14 +768,5 @@ int NetWorker::Prompt(const QString extid, const QString prompt , bool bSyn)
     doc.setObject(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
 
-    if(bSyn)
-    {
-        QByteArray recv = sendSyncRequest("extension/playprompt", data);
-
-        return judgeStatus(recv);
-    }
-
     sendAsyncRequest("extension/playprompt", data); //采用异步发送
-
-    return 0;
 }

@@ -93,7 +93,7 @@
      <item>
       <widget class="QPushButton" name="okButton">
        <property name="text">
-        <string>登陆</string>
+        <string>登录</string>
        </property>
        <property name="default">
         <bool>true</bool>

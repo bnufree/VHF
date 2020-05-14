@@ -49,8 +49,9 @@ void logMessageOutputQt5(QtMsgType type, const QMessageLogContext &context, cons
         //重新启动的情况,将日志目录下的文件删除,保留最近的文件
         {
             QFileInfoList list = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::Time);
-            foreach(QFileInfo info, list)
+            for(int i=5; i<list.size();i++)
             {
+                QFileInfo info = list[i];
                 QFile::remove(info.absoluteFilePath());
             }
         }
@@ -76,7 +77,7 @@ void logMessageOutputQt5(QtMsgType type, const QMessageLogContext &context, cons
     std::cout << "\033[32m" << msg.toUtf8().toStdString() <<std::endl;
 }
 
-const QString myVersion = "202005060000";
+const QString myVersion = "202005130000";
 
 int main(int argc, char *argv[])
 {

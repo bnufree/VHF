@@ -37,7 +37,8 @@ int Extension::dial_up_extension(const QString callee)
     if (!isPingSuccess || data.status_int == EXTENSION_STATUS::UNAVAILABLE)
         return 3;
     QString caller = data.number;
-    return NetWorker::instance()->DialUpExtension(caller, callee);
+    NetWorker::instance()->signalDialUpExtension(caller, callee);
+    return 0;
 }
 
 /**
@@ -50,7 +51,8 @@ int Extension::dial_up_outto(const QString outto)
     if (!isPingSuccess || data.status_int == EXTENSION_STATUS::UNAVAILABLE)
         return 3;
     QString caller = data.number;
-    return NetWorker::instance()->DialUpOutto(caller, outto);
+    NetWorker::instance()->signalDialUpOutto(caller, outto);
+    return 0;
 }
 
 int Extension::dial_up_outto()
@@ -66,7 +68,8 @@ int Extension::hang_up()
 {
     if (!isPingSuccess || data.status_int == EXTENSION_STATUS::UNAVAILABLE)
         return 3;
-    return NetWorker::instance()->HangUpExtension(data.number);
+    NetWorker::instance()->signalHangUpExtension(data.number);
+    return 0;
 }
 
 /**
@@ -76,7 +79,8 @@ int Extension::hang_up()
  */
 int Extension::update_username(const QString new_username)
 {
-    return NetWorker::instance()->UpdateExtensionUsername(data.number, new_username);
+    NetWorker::instance()->signalUpdateExtensionUsername(data.number, new_username);
+    return 0;
 }
 
 void Extension::pingTest()

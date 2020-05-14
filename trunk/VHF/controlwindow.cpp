@@ -7,7 +7,7 @@
 #include "quploadfilethread.h"
 #include <QCoreApplication>
 #include <QDir>
-#include "zchxdataasyncworker.h"
+//#include "zchxdataasyncworker.h"
 #include <QButtonGroup>
 #include "zchxvhfconvertthread.h"
 #include <QShortcut>
@@ -22,17 +22,14 @@ bool                mTest = false;
 ControlWindow::ControlWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::ControlWindow),
-    mDataAsyncWorker(nullptr),
     mTaskMgrCenter(nullptr),
     mJavaInfoThread(nullptr)
 {
     ui->setupUi(this);
     ui->im_broad_btn->setChecked(true);
     setPlanControlsVisible(false);
-    //
-    mDataAsyncWorker = new zchxDataAsyncWorker;
-    connect(mDataAsyncWorker, &zchxDataAsyncWorker::signalSendPBXHeartResult, this, &ControlWindow::slot_heartbeat_timeup);
-    connect(mDataAsyncWorker, &zchxDataAsyncWorker::signalSendExtensionData, this, &ControlWindow::QueryExtensionNumber);
+    connect(NetWorker::instance(), SIGNAL(signalSendExtensionList(ExtensionDataList,int)),
+            this, SLOT(slotRecvExtensionList(ExtensionDataList,int)));
 
     //界面初始化
     CreatView();
@@ -61,7 +58,6 @@ ControlWindow::ControlWindow(QWidget *parent) :
 
 ControlWindow::~ControlWindow()
 {
-    if(mDataAsyncWorker) delete  mDataAsyncWorker;
     if(mTaskMgrCenter) delete mTaskMgrCenter;
     if(mJavaInfoThread) delete mJavaInfoThread;
 
@@ -150,114 +146,59 @@ void ControlWindow::CreatView()
     QStringList listHead;
     listHead <<QStringLiteral("岸站名称");
     m_pExtensionModel->setHorizontalHeaderLabels(listHead);
-
-    if(mDataAsyncWorker)
-    {
-        //this->statusBar()->showMessage(QStringLiteral("start get ip phones from server"));
-        mDataAsyncWorker->signalQueryExtensionNumber();
-    }
-
+    NetWorker::instance()->signalQueryExtension();
 }
 
-void ControlWindow::QueryExtensionNumber(const QByteArray& recv, bool sts)
+void ControlWindow::slotRecvExtensionList(const ExtensionDataList& list,int code)
 {
-    qDebug()<<"recv extensiion:"<<recv;
-    if (!sts)
+    qDebug()<<"recv extensiion:"<<list.size();
+    if (code == Extension_Query_TimeOut)
     {
         this->statusBar()->showMessage(QStringLiteral("接收岸站分机数据超时"));
-    } else
+        return;
+    } else if(code == Extension_Query_Failed)
     {
+        this->statusBar()->showMessage(QStringLiteral("岸站分机数据查询状态：失败"));
+        return;
+    } else {
         this->statusBar()->showMessage(QStringLiteral("岸站分机数据更新"));
     }
 
-    if(recv.size() > 0)
+
+    //添加单控制控件
+    if (singleControlMap.size() != list.size())
     {
-        QJsonParseError ParseError;
-        QJsonDocument JDocument = QJsonDocument::fromJson(recv,&ParseError);
-        if (ParseError.error != QJsonParseError::NoError)
+        DeleteWidget();
+        AddSingleWidget(list);
+        //添加分组控制控件
+        if (nullptr == groupControlWidget)   AddGroupWidget();
+
+        //添加分机与指挥中心控件的关联
+        QString centerNum = IniFile::instance()->GetGroupCenter();
+        if (centerNum.isEmpty())
         {
-            this->statusBar()->showMessage(QStringLiteral("岸站分机json数据错误。错误类型:%1").arg(ParseError.errorString()));
+            QMessageBox::critical(this, QStringLiteral("提示"), QStringLiteral("请先设置好指挥中心，请重启软件！"));
             return;
         }
-        if (!JDocument.isObject())
+
+        ControlWidget* centerControlWidget = singleControlMap.value(centerNum);
+        for (int i = 0; i < singleControlMap.size(); i++)
         {
-            this->statusBar()->showMessage(QStringLiteral("岸站分机json数据错误,json不是Object"));
-            return;
+            if (singleControlMap.keys().at(i) == centerNum)
+                continue;
+            ControlWidget* controlWidget = singleControlMap.values().at(i);
+            connect(controlWidget, &ControlWidget::SignalTxButtonPressed, centerControlWidget, &ControlWidget::SlotTxButtonPressed);
+            connect(controlWidget, &ControlWidget::SignalTxButtonReleased, centerControlWidget, &ControlWidget::SlotTxButtonReleased);
         }
-
-        QJsonObject Json = JDocument.object();
-        if (Json.value("status").toString() == "Failed")
-        {
-            this->statusBar()->showMessage(QStringLiteral("岸站分机数据查询状态：失败"));
-        }
-        else
-        {
-            if (Json.value("extlist").isArray())
-            {
-                QJsonArray Array = Json.value("extlist").toArray();
-                if (Array.isEmpty())
-                {
-                    this->statusBar()->showMessage(QStringLiteral("岸站分机数据不存在"));
-                }
-
-                //添加单控制控件
-                if (singleControlMap.size() != Array.size())
-                {
-                    DeleteWidget();
-                    AddSingleWidget(Array);
-                }
-                else
-                {
-                    UpdateStatus(Array);
-                }
-
-//                if (singleControlMap.isEmpty())
-//                {
-//                    QMessageBox::critical(this,"提示","内存错误，请重启软件！");
-//                    return;
-//                }
-
-                //添加分组控制控件
-                if (nullptr == groupControlWidget)   AddGroupWidget();
-
-                //添加分机与指挥中心控件的关联
-                QString centerNum = IniFile::instance()->GetGroupCenter();
-                if (centerNum.isEmpty())
-                {
-                    QMessageBox::critical(this, QStringLiteral("提示"), QStringLiteral("请先设置好指挥中心，请重启软件！"));
-                    return;
-                }
-
-                ControlWidget* centerControlWidget = singleControlMap.value(centerNum);
-                for (int i = 0; i < singleControlMap.size(); i++)
-                {
-                    if (singleControlMap.keys().at(i) == centerNum)
-                        continue;
-                    ControlWidget* controlWidget = singleControlMap.values().at(i);
-                    connect(controlWidget, &ControlWidget::SignalTxButtonPressed, centerControlWidget, &ControlWidget::SlotTxButtonPressed);
-                    connect(controlWidget, &ControlWidget::SignalTxButtonReleased, centerControlWidget, &ControlWidget::SlotTxButtonReleased);
-                }
-            }
-            else
-            {
-                this->statusBar()->showMessage(QStringLiteral("岸站分机数据格式不是Array，解析失败"));
-            }
-        }
+    }
+    else
+    {
+        UpdateStatus(list);
     }
 
 
     //更新岸站列表数据
     QStringList keys;
-#ifdef CD_TEST
-    if(keys.size() == 0)
-    {
-        keys.append("1000");
-        keys.append("1001");
-        keys.append("1002");
-        keys.append("1003");
-        keys.append("1004");
-    }
-#endif
     foreach (ControlWidget* w, singleControlMap) {
         //这里只是添加播报岸站的数据
         if(!w || !(w->isBroadcastStation()))
@@ -318,52 +259,39 @@ void ControlWindow::QueryExtensionNumber(const QByteArray& recv, bool sts)
     }
 }
 
-void ControlWindow::UpdateStatus(QJsonArray &array)
+void ControlWindow::UpdateStatus(const ExtensionDataList& list)
 {
     //添加单控制控件
-    for(int i = 0; i < array.size(); i++)
+    for(int i = 0; i < list.size(); i++)
     {
-        QJsonObject obj = array.at(i).toObject();
-        QString targetNum = obj.value("extnumber").toString();
-        if (!singleControlMap.contains(targetNum))
-            continue;
+        ExtensionData obj = list[i];
+        QString targetNum = obj.number;
+        if (!singleControlMap.contains(targetNum)) continue;
         ControlWidget* control_widget = singleControlMap.value(targetNum);
-        QString status = obj.value("status").toString();
+        QString status = obj.status_str;
         control_widget->GetExtension()->setStatus(status);
-        control_widget->GetExtension()->setUserName(obj.value("username").toString());
+        control_widget->GetExtension()->setUserName(obj.username);
         control_widget->RefreshView();
     }    
 }
 
-void ControlWindow::AddSingleWidget(QJsonArray &array)
+void ControlWindow::AddSingleWidget(const ExtensionDataList& list)
 {
     int BusyNum = 0;
-    for (int i=0; i<array.size(); i++)
+    for (int i=0; i<list.size(); i++)
     {
-        QJsonObject obj = array.at(i).toObject();
-        ExtensionData extensionData;
-        extensionData.number = obj.value("extnumber").toString();
-        extensionData.username = obj.value("username").toString();
-        QString status = obj.value("status").toString();
-        if (status == "Busy")
+        ExtensionData obj = list[i];
+        if (obj.status_int == EXTENSION_STATUS::BUSY)
         {
             BusyNum++;
-            extensionData.status_int = EXTENSION_STATUS::BUSY;
         }
-        else if (status == "Registered")
-            extensionData.status_int = EXTENSION_STATUS::REGISTER;
-        else if (status == "Ringing")
-            extensionData.status_int = EXTENSION_STATUS::RINGING;
-        else
-            extensionData.status_int = EXTENSION_STATUS::UNAVAILABLE;
-        extensionData.status_str = status;
 
-        extensionData.address = IniFile::instance()->ReadKeyValue(QString("%1/Address").arg(extensionData.number));
-        if (extensionData.address.isEmpty())
-            QMessageBox::warning(this, QStringLiteral("提示"),  extensionData.number + QStringLiteral("分机IP地址无效，请检查配置文件config"));
-        extensionData.meetingNo = IniFile::instance()->GetGroupNumber();
+        obj.address = IniFile::instance()->ReadKeyValue(QString("%1/Address").arg(obj.number));
+        if (obj.address.isEmpty())
+            QMessageBox::warning(this, QStringLiteral("提示"),  obj.number + QStringLiteral("分机IP地址无效，请检查配置文件config"));
+        obj.meetingNo = IniFile::instance()->GetGroupNumber();
 
-        ControlWidget * controlwidget = new ControlWidget(nullptr,extensionData);
+        ControlWidget * controlwidget = new ControlWidget(nullptr,obj);
 
         connect(controlwidget, &ControlWidget::SignalOperationFailed, this, &ControlWindow::SlotOperationFailed);
         connect(controlwidget, &ControlWidget::to_refresh, this, &ControlWindow::Refresh);
@@ -378,7 +306,7 @@ void ControlWindow::AddSingleWidget(QJsonArray &array)
         widgetItem->setSizeHint(QSize(310, 340));
         listWidget->addItem(widgetItem);
         listWidget->setItemWidget(widgetItem, controlwidget);
-        singleControlMap.insert(extensionData.number, controlwidget);
+        singleControlMap.insert(obj.number, controlwidget);
     }
 
     if (BusyNum > 2)
@@ -441,24 +369,7 @@ void ControlWindow::slotOpenTest()
 
 void ControlWindow::Refresh()
 {
-    if(mDataAsyncWorker) mDataAsyncWorker->signalQueryExtensionNumber();
-//    QByteArray recv;
-//    if (!NetWorker::instance()->QueryExtensionList(recv))
-//    {
-//        QJsonDocument doc = QJsonDocument::fromJson(recv);
-//        QJsonObject obj = doc.object();
-//        if (obj.value("status").toString() == "Success")
-//        {
-//            QJsonArray array = obj.value("extlist").toArray();
-//            if (array.isEmpty())
-//            {
-//                QMainWindow::statusBar()->showMessage("extensionList is empty;");
-//                return;
-//            }
-
-//            UpdateStatus(array);
-//        }
-//    }
+    NetWorker::instance()->signalQueryExtension();
 }
 
 void ControlWindow::slot_heartbeat_timeup(bool sts, const QString& msg)
@@ -505,7 +416,7 @@ void ControlWindow::closeEvent(QCloseEvent *event)
         qDebug()<<"start close";
         QTime t;
         t.start();
-        NetWorker::instance()->Logout();
+        NetWorker::instance()->signalLogout();
         qDebug()<<"logout:"<<t.elapsed();
         t.start();
 //        event->accept();  //接受退出信号，程序退出
@@ -569,7 +480,7 @@ void ControlWindow::on_ChangeBtn_clicked()
 void ControlWindow::on_SendBtn_clicked()
 {
     // 设置TableWidget不能对单元格内容修改
-    ui->qTableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->qTableWidget->setEditTriggers(QAbstractItemView::DoubleClicked);
     QTableWidgetItem * item = ui->qTableWidget->currentItem();
     if(item == nullptr)
     {
@@ -695,7 +606,7 @@ QStringList ControlWindow::getBroadCastExtensions(bool check)
 void ControlWindow::on_play_clicked()
 {
     // 设置TableWidget不能对单元格内容修改
-    ui->qTableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->qTableWidget->setEditTriggers(QAbstractItemView::DoubleClicked);
     QTableWidgetItem * item = ui->qTableWidget->currentItem();
     qDebug() << "item :" << item;
     if (item == nullptr)
@@ -882,7 +793,7 @@ void ControlWindow::slotCloseStation(const QString& source, bool sts)
 
 void ControlWindow::slotRestartApp()
 {
-    NetWorker::instance()->Logout();
+    NetWorker::instance()->signalLogout();
     QString program = QApplication::applicationFilePath();
     QStringList arguments = QApplication::arguments();
     QString workingDirectory = QDir::currentPath();

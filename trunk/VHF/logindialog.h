@@ -19,6 +19,8 @@ public:
     ~LoginDialog();
 protected:
     virtual void closeEvent(QCloseEvent* event);
+private slots:
+    void slotRecvLoginResult(int code);
 
 signals:
     void signalLoginSuccess();

@@ -5,6 +5,7 @@
 
 zchxDataAsyncWorker::zchxDataAsyncWorker(QObject *parent) : QObject(parent)
 {
+#if 0
     mHeartbeatErrorCount = 0;
     connect(this, SIGNAL(signalQueryExtensionNumber()), this, SLOT(slotUpdateExtension()));
     connect(NetWorker::instance(), SIGNAL(signal_heartbeat_timeup()), this, SLOT(slotPBXHeartWork()));
@@ -15,6 +16,7 @@ zchxDataAsyncWorker::zchxDataAsyncWorker(QObject *parent) : QObject(parent)
 
     //服务器心跳开始
     NetWorker::instance()->startHeartTimer();
+#endif
 }
 
 zchxDataAsyncWorker::~zchxDataAsyncWorker()
@@ -27,6 +29,7 @@ zchxDataAsyncWorker::~zchxDataAsyncWorker()
 
 void zchxDataAsyncWorker::slotPBXHeartWork()
 {
+#if 0
     if(mHeartbeatErrorCount >= 2)
     {
         if(NetWorker::instance()->Relogin() == 0)
@@ -55,14 +58,17 @@ void zchxDataAsyncWorker::slotPBXHeartWork()
                 .arg(QStringLiteral("PBX服务器心跳成功"));
     }
     emit signalSendPBXHeartResult(sts, message);
+#endif
 }
 
 void zchxDataAsyncWorker::slotUpdateExtension()
 {
+#if 0
     QByteArray recv;
     int result = NetWorker::instance()->QueryExtensionList(recv);
     bool sts = true;
     if (0 != result || recv.isEmpty()) sts = false;
     qDebug()<<"update extension end, status:"<<sts;
     emit signalSendExtensionData(recv, sts);
+#endif
 }

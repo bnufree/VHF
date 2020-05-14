@@ -65,6 +65,10 @@ ControlWidget::ControlWidget(QFrame *parent, const ExtensionData extensionData) 
 ControlWidget::~ControlWidget()
 {
     disconnect(this);
+    if (extension_->isAutoEnter)
+        IniFile::instance()->WriteKeyValue(extension_->getData().number + "/AutoEnter", "1");
+    else
+        IniFile::instance()->WriteKeyValue(extension_->getData().number + "/AutoEnter", "0");
 
     ExtensionThread.quit();
     ExtensionThread.wait();
@@ -82,18 +86,13 @@ ControlWidget::~ControlWidget()
 //        relay_controller_ = nullptr;
 //    }
 
-    if (extension_->isAutoEnter)       
-        IniFile::instance()->WriteKeyValue(extension_->getData().number + "/AutoEnter", "1");
-    else
-        IniFile::instance()->WriteKeyValue(extension_->getData().number + "/AutoEnter", "0");
+
 
     delete ui;
 }
 
 void ControlWidget::InitRelay()
-{
-    //检查是不是当前绑定的中心,如果不是,不进行任何处理
-    if(isCenter() && extension_->getData().number != IniFile::instance()->GetGroupCenter()) return;
+{    
     RelayData relayData;
     relayData.address = IniFile::instance()->ReadKeyValue(QString("%1/RelayAddress").arg(extension_->getData().number));
     if (relayData.address.isEmpty())
@@ -103,9 +102,17 @@ void ControlWidget::InitRelay()
     }
     relayData.port = IniFile::instance()->ReadKeyValue(QString("%1/RelayPort").arg(extension_->getData().number), "12345").toInt();
     relayData.channel = IniFile::instance()->ReadKeyValue(QString("%1/Channel").arg(extension_->getData().number), "10").toInt();
+    ui->channel_edit->setText(QString::number(relayData.channel));
     relayData.autoCloseTime = IniFile::instance()->ReadKeyValue(QString("%1/Duration").arg(extension_->getData().number), "10").toInt();
     relayData.heartInterval = IniFile::instance()->getRelayRequestTimeInterval();
     //    qDebug()<<"replaydata:"<<relayData.address<<relayData.port<<relayData.channel;
+
+    //检查是不是当前绑定的中心,如果不是,不进行任何处理
+    if(isCenter() && extension_->getData().number != IniFile::instance()->GetGroupCenter())
+    {
+        ui->txButton->setEnabled(false);
+        return;
+    }
 
     relay_controller_ = new RelayController(nullptr, relayData);
     relay_controller_->moveToThread(&RelayControllerThread);
@@ -224,7 +231,7 @@ void ControlWidget::InitUI()
     ui->extension_type->setCurrentIndex(mExtensionType);
     ui->extension_type->setEditable(false);
     ui->extension_type->setEnabled(false);
-    ui->propertyFrame->setVisible(false);
+    ui->propertyFrame->setVisible(true);
     ui->save->setVisible(false);
     connect(ui->save, SIGNAL(clicked(bool)), this, SLOT(slotSave()));
 }

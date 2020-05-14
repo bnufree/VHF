@@ -2,6 +2,8 @@
 #define NETWORKER_H
 
 #include <QObject>
+#include <QThread>
+#include <vhfdata.h>
 
 #define REQUEST_TIMEOUT 10*1000
 
@@ -16,39 +18,60 @@ public:
     static NetWorker* instance();
     ~NetWorker();
 
+    bool    isOk() const {return mIsOK;}
+
     void setToken(QString token);
     static QString errorNo2String(int errorNo);
     int judgeStatus(const QByteArray recv);
-    QByteArray sendSyncRequest(const QString api, const QByteArray data = QByteArray());
+
+    void startHeartTimer();
+    QString queryExtensionStatus(const QString& number);
+private:    
+    QByteArray sendSyncRequest(const QString api, const QByteArray data = QByteArray(), bool relogin = true);
     void sendAsyncRequest(const QString api, const QByteArray data = QByteArray());
 
-    int send_heartbeat();
-    int Login(const QString username, const QString password);
-    int Relogin() {return Login(mUserName, mPassWord);}
-    void Logout();
-    void SendHeartbeat();
-    int QueryExtensionList(QByteArray& recv);
-    int DialUpExtension(const QString caller, const QString callee);
-    int DialUpOutto(const QString caller, const QString outto);
-    int HangUpExtension(const QString extid);
-    int UpdateExtensionUsername(const QString extid, const QString username);
-    void startHeartTimer();
-    int Prompt(const QString extid, const QString prompt , bool bSyn = false);
+public slots:
+    void slotLogin(const QString username, const QString password);
+    void slotLogout();
+    void slotQueryExtensionList();    
+    void slotDialUpExtension(const QString caller, const QString callee);
+    void slotDialUpOutto(const QString caller, const QString outto);
+    void slotHangUpExtension(const QString extid);
+    void slotUpdateExtensionUsername(const QString extid, const QString username);
+    void slotPrompt(const QString extid, const QString prompt);
+    void slotRelogin() {return slotLogin(mUserName, mPassWord);}
+    void slotQueryExtensionStatus(const QString& number);
 
 
 signals:
-    void finished(QNetworkReply *reply);
+    void signalLogin(const QString& userName, const QString& pwd);
+    void signalSendLoginResult(int code);
+    void signalLogout();
+    void signalQueryExtension();
+    void signalSendExtensionList(const ExtensionDataList& list, int code);
+    void signalDialUpExtension(const QString caller, const QString callee);
+    void signalDialUpOutto(const QString caller, const QString outto);
+    void signalHangUpExtension(const QString extid);
+    void signalUpdateExtensionUsername(const QString extid, const QString username);
+    void signalPrompt(const QString extid, const QString prompt);
+    void signalQueryExtensionStatus(const QString& number);
+
+//    void finished(QNetworkReply *reply);
     void signal_extension_status_changed(const QString extension_num, const QString status);
     void signal_heartbeat_timeup();
     void SignalTimeout();
     void SignalReconnected();
     void SignalConfigChanged(const QString extId);
-    void signalPlay(const QString extid, const QString prompt , bool bSyn);
 
 public slots:
-    void new_connection();
-    void recieve_data();
-    void slotPlay(const QString extid, const QString prompt , bool bSyn){Prompt(extid, prompt, bSyn);}
+    void slotPlay(const QString extid, const QString prompt)
+    {
+        slotPrompt(extid, prompt);
+    }
+    void slotNewReportConnection();
+    void slotRecvReportData();
+    void slotHeartBeat();
+    void slotReadyReadServerData();
 
 private:
     explicit NetWorker(QObject* parent = nullptr);
@@ -64,6 +87,7 @@ private:
 
 private:
     static NetWorker     *minstance;
+    QThread               mWorkThread;
 
     class MGarbage
     {
@@ -74,6 +98,7 @@ private:
         }
     };
     static MGarbage Garbage;
+    bool                mIsOK;
 };
 
 #endif // NETWORKER_H
