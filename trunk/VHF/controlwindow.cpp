@@ -391,7 +391,7 @@ void ControlWindow::SlotOperationFailed(QString username, int error_num)
     statusBar()->showMessage(message);
 }
 
-void ControlWindow::closeEvent(QCloseEvent *event)
+void ControlWindow::saveTemplateContent()
 {
     int index = 0;
     for (int i=0; i<ui->qTableWidget->rowCount(); i++)
@@ -408,6 +408,12 @@ void ControlWindow::closeEvent(QCloseEvent *event)
     {
         IniFile::instance()->WriteKeyValue(QString("Broadcast/row%1").arg(index++), "");
     }
+}
+
+void ControlWindow::closeEvent(QCloseEvent *event)
+{
+    quint64 appid = QApplication::applicationPid();
+    saveTemplateContent();
     if(messageBox(QStringLiteral("退出客户端？"), true) == QMessageBox::Cancel)
     {
         event->ignore();  //忽略退出信号，程序继续运行
@@ -420,8 +426,10 @@ void ControlWindow::closeEvent(QCloseEvent *event)
         qDebug()<<"logout:"<<t.elapsed();
         t.start();
 //        event->accept();  //接受退出信号，程序退出
-        exit(0);
-        qDebug()<<"exit:"<<t.elapsed();
+//        exit(0);
+        qDebug()<<"exit:"<<t.elapsed()<<appid;
+        QProcess process;
+        process.startDetached(QString("taskkill /f /pid %1").arg(appid));
     }
 }
 
@@ -453,25 +461,35 @@ void ControlWindow::on_DeleteBtn_clicked()
     if (item != nullptr)
     {
         if(messageBox(QStringLiteral("删除选中的模板？"), true) == QMessageBox::Cancel) return;
-        QString inform = item->text().trimmed();
-        if (!inform.isEmpty())
-        {
-            item->setText("");
-            IniFile::instance()->WriteKeyValue(QString("Broadcast/row%1").arg(item->row()), "");
-        }
     }
+    int row_cnt = ui->qTableWidget->rowCount();
+    ui->qTableWidget->removeRow(item->row());
+    ui->qTableWidget->setRowCount(row_cnt);
+    saveTemplateContent();
 }
 
 // 修改播报内容
 void ControlWindow::on_ChangeBtn_clicked()
-{
+{    
     // 设置TableWidget可对单元格内容修改
     ui->qTableWidget->setEditTriggers(QAbstractItemView::DoubleClicked);
     QTableWidgetItem * item = ui->qTableWidget->currentItem();
-    if (item != nullptr)
+    if(!item) return;
+    QString src = IniFile::instance()->ReadKeyValue(QString("Broadcast/row%1").arg(item->row()));
+    if(messageBox(QStringLiteral("保存对当前模板的修改？"), true) == QMessageBox::Cancel)
     {
-        if(messageBox(QStringLiteral("保存对当前模板的修改？"), true) == QMessageBox::Cancel) return;
-        QString inform = item->text().trimmed();
+        item->setText(src);
+        return;
+    }
+    QString inform = item->text().trimmed();
+    if(inform.trimmed().isEmpty())
+    {
+        int row_cnt = ui->qTableWidget->rowCount();
+        ui->qTableWidget->removeRow(item->row());
+        ui->qTableWidget->setRowCount(row_cnt);
+        saveTemplateContent();
+    } else
+    {
         IniFile::instance()->WriteKeyValue(QString("Broadcast/row%1").arg(item->row()), item->text());
     }
 }

@@ -231,7 +231,7 @@ void ControlWidget::InitUI()
     ui->extension_type->setCurrentIndex(mExtensionType);
     ui->extension_type->setEditable(false);
     ui->extension_type->setEnabled(false);
-    ui->propertyFrame->setVisible(true);
+    ui->propertyFrame->setVisible(false);
     ui->save->setVisible(false);
     connect(ui->save, SIGNAL(clicked(bool)), this, SLOT(slotSave()));
 }

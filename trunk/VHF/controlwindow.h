@@ -33,7 +33,8 @@ public:
     explicit ControlWindow(QWidget *parent = nullptr);
     ~ControlWindow();
 
-
+private slots:
+    void saveTemplateContent();
 public slots:
     void slotOpenTest();
     void Refresh();

@@ -68,19 +68,28 @@ void zchxVHFAudioPlayThread::run()
     //检查话机的状态
     t = QDateTime::currentSecsSinceEpoch();
     bool status_change = false;
+    int  playend = 0;
     while (1) {
         QString number = mExtension->getData().number;
         NetWorker::instance()->signalQueryExtensionStatus(number);
         int status = mExtension->getStatus();
-        if(status == EXTENSION_STATUS::BUSY && !status_change)
+        if(status == EXTENSION_STATUS::BUSY)
         {
-            status_change = true;
-            qDebug()<<"now playing audio."<<mExtension->getData().number<<mAudioFileName;
+            if(!status)
+            {
+                status_change = true;
+                qDebug()<<"now playing audio."<<mExtension->getData().number<<mAudioFileName;
+            }
+            playend = 0;
         }
         if(status_change && status == EXTENSION_STATUS::REGISTER)
         {
+            playend++;
+            if(playend >= 3)
+            {
             qDebug()<<"play audio finished."<<mExtension->getData().number<<mAudioFileName;
             break;
+            }
         }
 #if 0
 //        qDebug()<<" pbx status:"<<mExtension->getStatusStr()<<status<<waite_pbx_play<<pbx_is_playing;
