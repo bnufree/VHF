@@ -50,7 +50,7 @@ void LoginDialog::onOkButtonClicked()
     QByteArray baMd5 = QCryptographicHash::hash(password.toLocal8Bit(), QCryptographicHash::Md5);
     passwordMd5.append(baMd5.toHex().toLower());
 
-    NetWorker::instance()->signalLogin(username, passwordMd5);
+    NetWorker::instance()->signalLogin(username, passwordMd5, true);
 }
 
 void LoginDialog::slotRecvLoginResult(int errorNo)

@@ -31,6 +31,8 @@ ControlWindow::ControlWindow(QWidget *parent) :
     connect(NetWorker::instance(), SIGNAL(signalSendExtensionList(ExtensionDataList,int)),
             this, SLOT(slotRecvExtensionList(ExtensionDataList,int)));
 
+    NetWorker::instance()->startHeart();
+
     //界面初始化
     CreatView();
 
