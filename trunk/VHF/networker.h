@@ -19,19 +19,16 @@ public:
     ~NetWorker();
 
     bool    isOk() const {return mIsOK;}
-
-    void setToken(QString token);
-    static QString errorNo2String(int errorNo);
-    int judgeStatus(const QByteArray recv);
-
-    void startHeartTimer();
-    QString queryExtensionStatus(const QString& number);
+    void    startHeart();
+    void    setToken(QString token);
+    static  QString errorNo2String(int errorNo);
+    int     judgeStatus(const QByteArray recv);
 private:    
-    QByteArray sendSyncRequest(const QString api, const QByteArray data = QByteArray(), bool relogin = true);
+    QByteArray sendSyncRequest(const QString api, const QByteArray data = QByteArray());
     void sendAsyncRequest(const QString api, const QByteArray data = QByteArray());
 
 public slots:
-    void slotLogin(const QString username, const QString password);
+    void slotLogin(const QString username, const QString password, bool returnRes);
     void slotLogout();
     void slotQueryExtensionList();    
     void slotDialUpExtension(const QString caller, const QString callee);
@@ -39,12 +36,11 @@ public slots:
     void slotHangUpExtension(const QString extid);
     void slotUpdateExtensionUsername(const QString extid, const QString username);
     void slotPrompt(const QString extid, const QString prompt);
-    void slotRelogin() {return slotLogin(mUserName, mPassWord);}
     void slotQueryExtensionStatus(const QString& number);
 
 
 signals:
-    void signalLogin(const QString& userName, const QString& pwd);
+    void signalLogin(const QString& userName, const QString& pwd, bool returnRes);
     void signalSendLoginResult(int code);
     void signalLogout();
     void signalQueryExtension();

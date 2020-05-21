@@ -69,9 +69,14 @@ void zchxVHFAudioPlayThread::run()
     t = QDateTime::currentSecsSinceEpoch();
     bool status_change = false;
     int  playend = 0;
+    qint64 query_t = QDateTime::currentSecsSinceEpoch();
     while (1) {
         QString number = mExtension->getData().number;
-        NetWorker::instance()->signalQueryExtensionStatus(number);
+        if(QDateTime::currentSecsSinceEpoch() - query_t >= 2)
+        {
+            NetWorker::instance()->signalQueryExtensionStatus(number);
+            query_t = QDateTime::currentSecsSinceEpoch();
+        }
         int status = mExtension->getStatus();
         if(status == EXTENSION_STATUS::BUSY)
         {
@@ -91,39 +96,14 @@ void zchxVHFAudioPlayThread::run()
                 break;
             }
         }
-#if 0
-//        qDebug()<<" pbx status:"<<mExtension->getStatusStr()<<status<<waite_pbx_play<<pbx_is_playing;
-        if(status == BUSY && waite_pbx_play)
-        {
-            qDebug()<<"now playing audio."<<mExtension->getData().number<<mAudioFileName;
-            waite_pbx_play = false;
-            pbx_is_playing = true;
-        } else if(status == REGISTER)
-        {
-            if(waite_pbx_play || pbx_is_playing)
-            {
-                if(pbx_is_playing)
-                {
-                    qDebug()<<"play audio finished."<<mExtension->getData().number<<mAudioFileName;
-                } else
-                {
-                    qDebug()<<"play audio error occured."<<mExtension->getData().number<<mAudioFileName;
-                }
-                break;
-            }
-        } else if(status == RINGING)
-        {
-            waite_pbx_play = true;
-            qDebug()<<"extension now is ringring. wait for play audio."<<mExtension->getData().number<<mAudioFileName;
-        }
-#endif
 
         if(QDateTime::currentSecsSinceEpoch() - t >= 30)
         {
             qDebug()<<" pbx play audio time out(30s). ";
+            mExtension->hang_up();
             break;
         }
-        QThread::msleep(1000);
+
     }
     //最后关闭继电器
     t = QDateTime::currentSecsSinceEpoch();
@@ -134,9 +114,10 @@ void zchxVHFAudioPlayThread::run()
             qDebug()<<" replay is off ";
             break;
         }
-        if(QDateTime::currentSecsSinceEpoch() - t >= 60)
+        if(QDateTime::currentSecsSinceEpoch() - t >= 30)
         {
-            qDebug()<<" replay is not off but now is time out(60s). defautly on ";
+            qDebug()<<" replay is not off but now is time out(30s). defautly on ";
+            mRelayController->send_set_status_command(0, 0);
             break;
         }
         msleep(500);

@@ -77,7 +77,7 @@ void logMessageOutputQt5(QtMsgType type, const QMessageLogContext &context, cons
     std::cout << "\033[32m" << msg.toUtf8().toStdString() <<std::endl;
 }
 
-const QString myVersion = "202005190000";
+const QString myVersion = "202005210000";
 
 int main(int argc, char *argv[])
 {

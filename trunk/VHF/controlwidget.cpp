@@ -60,6 +60,12 @@ ControlWidget::ControlWidget(QFrame *parent, const ExtensionData extensionData) 
     connect(extension_, &Extension::statusChanged, this, &ControlWidget::RefreshView);
     //是否显示测试话机
     if(!mTest)  ui->testBroadcastFrame->setVisible(false);
+    // 如果是播报安站
+    if(mExtensionType == Extension_Station_Broadcast)
+    {
+        //先将安站TX关闭
+        slotCloseRelay();
+    }
 }
 
 ControlWidget::~ControlWidget()
