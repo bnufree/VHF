@@ -136,7 +136,7 @@ void Extension::autoEnter()
         return;
     if(isPlayingAudio) return;
 
-    qDebug()<<"data status:"<<data.status_int<<data.status_str;
+    qDebug()<<__FUNCTION__<<"data status:"<<data.status_int<<data.status_str<<data.number<<isMeetingAvailable;
     if (data.status_int == EXTENSION_STATUS::REGISTER)
         dial_up_outto();
 }

@@ -13,6 +13,7 @@
 #include <QShortcut>
 #include <QProcess>
 #include "watchdogthread.h"
+#include <QMessageBox>
 
 
 #define MIN_TIME 60*1000
@@ -420,14 +421,19 @@ void ControlWindow::closeEvent(QCloseEvent *event)
     } else
     {
         qDebug()<<"start close";
-        QTime t;
-        t.start();
+        foreach (ControlWidget* w, singleControlMap) {
+            w->slotCloseRelay();
+        }
+        QMessageBox msgBox;
+        msgBox.setWindowTitle(QStringLiteral("提示"));
+        msgBox.setText(QStringLiteral("系统关闭中...."));
+        msgBox.setStandardButtons(QMessageBox::NoButton);
+        QTimer* timeout_timer = new QTimer(this);
+        connect(timeout_timer, &QTimer::timeout, &msgBox, &QMessageBox::accept);
+        timeout_timer->setSingleShot(true);
+        timeout_timer->start(5* 1000);
+        msgBox.exec();
         NetWorker::instance()->signalLogout();
-        qDebug()<<"logout:"<<t.elapsed();
-        t.start();
-//        event->accept();  //接受退出信号，程序退出
-//        exit(0);
-        qDebug()<<"exit:"<<t.elapsed()<<appid;
         QProcess process;
         process.startDetached(QString("taskkill /f /pid %1").arg(appid));
     }

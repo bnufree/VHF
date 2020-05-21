@@ -113,6 +113,7 @@ NetWorker::NetWorker(QObject *parent) :
     d->m_timer = new QTimer();
     connect(d->m_timer, SIGNAL(timeout()),
             this, SLOT(slotHeartBeat()));
+    d->m_timer->start(HEARTBEAT_TIMER);
     this->moveToThread(&mWorkThread);
     mWorkThread.start();
 //    startHeartTimer();
@@ -145,7 +146,7 @@ void NetWorker::startHeartTimer()
 void NetWorker::slotHeartBeat()
 {
     QJsonObject obj;
-    obj.insert("ipaddr", d->m_ServerAddr);
+    obj.insert("ipaddr", d->localhost_address_);
     obj.insert("port", d->m_ListenPort);
     QJsonDocument doc;
     doc.setObject(obj);

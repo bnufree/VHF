@@ -75,7 +75,7 @@ void zchxVHFAudioPlayThread::run()
         int status = mExtension->getStatus();
         if(status == EXTENSION_STATUS::BUSY)
         {
-            if(!status)
+            if(!status_change)
             {
                 status_change = true;
                 qDebug()<<"now playing audio."<<mExtension->getData().number<<mAudioFileName;
@@ -87,8 +87,8 @@ void zchxVHFAudioPlayThread::run()
             playend++;
             if(playend >= 3)
             {
-            qDebug()<<"play audio finished."<<mExtension->getData().number<<mAudioFileName;
-            break;
+                qDebug()<<"play audio finished."<<mExtension->getData().number<<mAudioFileName;
+                break;
             }
         }
 #if 0
