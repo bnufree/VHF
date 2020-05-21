@@ -69,14 +69,9 @@ void zchxVHFAudioPlayThread::run()
     t = QDateTime::currentSecsSinceEpoch();
     bool status_change = false;
     int  playend = 0;
-    qint64 query_t = QDateTime::currentSecsSinceEpoch();
     while (1) {
         QString number = mExtension->getData().number;
-        if(QDateTime::currentSecsSinceEpoch() - query_t >= 2)
-        {
-            NetWorker::instance()->signalQueryExtensionStatus(number);
-            query_t = QDateTime::currentSecsSinceEpoch();
-        }
+        NetWorker::instance()->signalQueryExtensionStatus(number);
         int status = mExtension->getStatus();
         if(status == EXTENSION_STATUS::BUSY)
         {
@@ -103,6 +98,7 @@ void zchxVHFAudioPlayThread::run()
             mExtension->hang_up();
             break;
         }
+        msleep(2000);
 
     }
     //最后关闭继电器
