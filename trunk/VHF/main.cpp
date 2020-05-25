@@ -8,6 +8,7 @@
 #include <QTextCodec>
 #include <QDir>
 #include <QSharedMemory>
+#include "testdebugoutput.h"
 
 //#define DateTime
 const QString DateTime = QDateTime::currentDateTime().toString("yyyy-MM-dd_hh-mm-ss");
@@ -68,13 +69,13 @@ void logMessageOutputQt5(QtMsgType type, const QMessageLogContext &context, cons
         log_file_lenth = file.size();
     } else
     {
-        std::cout <<"open file failed...........";
+//        std::cout <<"open file failed...........";
     }
     mutex.unlock();
-    message = QString("[%1] %2 [%3] [%4] ").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
-            .arg(text).arg(context.file).arg(context.line);
-    std::cout << "\033[31m" << message.toStdString();
-    std::cout << "\033[32m" << msg.toUtf8().toStdString() <<std::endl;
+//    message = QString("[%1] %2 [%3] [%4] ").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"))
+//            .arg(text).arg(context.file).arg(context.line);
+//    std::cout << "\033[31m" << message.toStdString();
+//    std::cout << "\033[32m" << msg.toUtf8().toStdString() <<std::endl;
 }
 
 const QString myVersion = "202005210000";
@@ -108,6 +109,7 @@ int main(int argc, char *argv[])
         qInstallMessageHandler(logMessageOutputQt5);
 //    }
     qDebug()<<"app version:"<<myVersion;
+#if 1
     LoginDialog loginDialog;
     if (loginDialog.exec() == QDialog::Accepted)
     {
@@ -115,5 +117,10 @@ int main(int argc, char *argv[])
         controlWindow.show();
         return a.exec();
     }
-    else return 0;
+#else
+    testDebugOutput *output = new testDebugOutput;
+    output->start();
+    return a.exec();
+#endif
+    return 0;
 }

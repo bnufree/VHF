@@ -53,7 +53,9 @@ public slots:
     void slotCloseStation(const QString& source, bool sts);
     void slotPlayTextAudio(const QString& id, const QString& text);
     void slotRestartApp();
+    void slotKillMe();
     void slotRecvExtensionList(const ExtensionDataList& list,int code);
+    void slot_extension_status_changed(const QString extension_num, const QString status);
 
 protected:
     virtual void closeEvent(QCloseEvent* event);

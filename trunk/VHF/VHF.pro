@@ -55,7 +55,8 @@ SOURCES += \
     centercontrolthread.cpp \
     zchxvhfaudioplaythread.cpp \
     watchdogthread.cpp \
-    rxbutton.cpp
+    rxbutton.cpp \
+    testdebugoutput.cpp
 
 HEADERS += \
     comtextaudiothread.h \
@@ -83,7 +84,8 @@ HEADERS += \
     zchxvhfaudioplaythread.h \
     watchdogthread.h \
     rxbutton.h \
-    vhfdata.h
+    vhfdata.h \
+    testdebugoutput.h
 
 FORMS += \
     logindialog.ui \

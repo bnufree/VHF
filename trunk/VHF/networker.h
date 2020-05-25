@@ -58,6 +58,7 @@ signals:
     void SignalTimeout();
     void SignalReconnected();
     void SignalConfigChanged(const QString extId);
+    void signalLoginFailedTooMany();
 
 public slots:
     void slotPlay(const QString extid, const QString prompt)
@@ -95,6 +96,7 @@ private:
     };
     static MGarbage Garbage;
     bool                mIsOK;
+    int                 mLoginFailedCnt;
 };
 
 #endif // NETWORKER_H

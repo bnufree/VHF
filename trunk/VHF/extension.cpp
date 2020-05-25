@@ -106,7 +106,7 @@ void Extension::pingTest()
         if(mDebug)  qDebug() << "Check status" << qPrintable(data.address) << ": online";
     }
     else {
-        qDebug() << "Check status" << qPrintable(data.address) << ": offline";
+        if(mDebug) qDebug() << "Check status" << qPrintable(data.address) << ": offline";
     }
     if (isPingSuccess != bPingSuccess)
     {
@@ -132,11 +132,8 @@ void Extension::setStatus(const QString status)
 
 void Extension::autoEnter()
 {
-    if (!isAutoEnter)
-        return;
+    if(!isAutoEnter) return;
     if(isPlayingAudio) return;
-
-    qDebug()<<__FUNCTION__<<"data status:"<<data.status_int<<data.status_str<<data.number<<isMeetingAvailable;
     if (data.status_int == EXTENSION_STATUS::REGISTER)
         dial_up_outto();
 }

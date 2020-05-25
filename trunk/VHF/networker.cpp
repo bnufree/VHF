@@ -76,6 +76,7 @@ NetWorker* NetWorker::instance()
 NetWorker::NetWorker(QObject *parent) :
     QObject(parent),
     mIsOK(false),
+    mLoginFailedCnt(0),
     d(new NetWorker::NetCore(this))
 {
     qRegisterMetaType<ExtensionDataList>("const ExtensionDataList&");
@@ -247,6 +248,7 @@ void NetWorker::slotLogin(const QString username, QString password, bool send)
     if(errNo == 0)
     {
         mIsOK = true;
+        mLoginFailedCnt = 0;
     } else
     {
         mIsOK = false;
@@ -260,6 +262,15 @@ void NetWorker::slotLogin(const QString username, QString password, bool send)
     {
         emit SignalReconnected();
         emit signalQueryExtension();
+    } else
+    {
+        mLoginFailedCnt++;
+    }
+
+    if(mLoginFailedCnt >= 5)
+    {
+        //重启客户端
+        emit signalLoginFailedTooMany();
     }
 }
 
@@ -309,7 +320,7 @@ void NetWorker::slotReadyReadServerData()
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if(!reply) return;
     QByteArray recv = reply->readAll();
-    qDebug()<<__FUNCTION__<<"recv server async data:"<<recv;
+//    qDebug()<<__FUNCTION__<<"recv server async data:"<<recv;
     QJsonParseError ParseError;
     QJsonDocument JDocument = QJsonDocument::fromJson(recv,&ParseError);
     if (ParseError.error == QJsonParseError::NoError){
@@ -517,11 +528,8 @@ QByteArray NetWorker::sendSyncRequest(const QString api, const QByteArray data)
         reply = d->manager->post(request, data);
     }
     QEventLoop eventloop;
-    QTimer* timeout_timer = new QTimer(this);
-    connect(timeout_timer, &QTimer::timeout, &eventloop, &QEventLoop::quit);
+    QTimer::singleShot(REQUEST_TIMEOUT, &eventloop, &QEventLoop::quit);
     connect(d->manager, &QNetworkAccessManager::finished, &eventloop, &QEventLoop::quit);
-    timeout_timer->setSingleShot(true);
-    timeout_timer->start(REQUEST_TIMEOUT);
     eventloop.exec();
 
     if (!reply->isReadable() || !reply->isFinished())

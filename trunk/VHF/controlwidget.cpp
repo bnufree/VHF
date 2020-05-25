@@ -52,10 +52,7 @@ ControlWidget::ControlWidget(QFrame *parent, const ExtensionData extensionData) 
 
     InitRelay();
     InitUI();
-    initCenterControl();
-    //推送分机状态变化事件
-    connect(NetWorker::instance(), &NetWorker::signal_extension_status_changed,
-            this, &ControlWidget::slot_extension_status_changed);  
+    initCenterControl();     
 
     connect(extension_, &Extension::statusChanged, this, &ControlWidget::RefreshView);
     //是否显示测试话机

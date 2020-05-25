@@ -32,6 +32,12 @@ ControlWindow::ControlWindow(QWidget *parent) :
     connect(NetWorker::instance(), SIGNAL(signalSendExtensionList(ExtensionDataList,int)),
             this, SLOT(slotRecvExtensionList(ExtensionDataList,int)));
 
+    //推送分机状态变化事件
+    connect(NetWorker::instance(), &NetWorker::signal_extension_status_changed,
+            this, &ControlWindow::slot_extension_status_changed);
+    connect(NetWorker::instance(), SIGNAL(signalLoginFailedTooMany()),
+            this, SLOT(slotKillMe()));
+
     NetWorker::instance()->startHeart();
 
     //界面初始化
@@ -826,4 +832,19 @@ void ControlWindow::slotRestartApp()
     QProcess::startDetached(program, arguments, workingDirectory);
     QApplication::exit();
 }
+
+void ControlWindow::slotKillMe()
+{
+    quint64 appid = QApplication::applicationPid();
+    QProcess process;
+    process.startDetached(QString("taskkill /f /pid %1").arg(appid));
+}
+
+void ControlWindow::slot_extension_status_changed(const QString extension_num, const QString status)
+{
+    ControlWidget * w = singleControlMap[extension_num];
+    if(!w) return;
+    w->slot_extension_status_changed(extension_num, status);
+}
+
 
