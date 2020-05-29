@@ -20,6 +20,13 @@
 extern  bool        mDebug;
 bool                mTest = false;
 
+qint64 getTimeWithoutSec(const QDateTime& src)
+{
+    QTime time = src.time();
+    QDateTime dst(src.date(), QTime(time.hour(), time.minute()));
+    return dst.toMSecsSinceEpoch();
+}
+
 ControlWindow::ControlWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::ControlWindow),
@@ -557,7 +564,7 @@ void ControlWindow::on_SendBtn_clicked()
     BroadcastSetting setting;
     setting.mType = ui->im_broad_btn->isChecked() ? Task_Immediately : Task_Planning;
     setting.mTimes = ui->times->text().toInt();
-    setting.mStartTime = ui->task_start_time->dateTime().toMSecsSinceEpoch();
+    setting.mStartTime = getTimeWithoutSec(ui->task_start_time->dateTime());
     setting.mTimeGap = ui->time_interval->text().toInt() * 60;
     setting.mContent = ui->qTableWidget->currentItem()->text();
     setting.mBroadExtIdList = getBroadCastExtensions();
@@ -660,7 +667,7 @@ void ControlWindow::on_play_clicked()
     BroadcastSetting setting;
     setting.mType = ui->im_broad_btn->isChecked() ? Task_Immediately : Task_Planning;
     setting.mTimes = ui->times->text().toInt();
-    setting.mStartTime = ui->task_start_time->dateTime().toMSecsSinceEpoch();
+    setting.mStartTime = getTimeWithoutSec(ui->task_start_time->dateTime());
     setting.mTimeGap = ui->time_interval->text().toInt() * 60;
     setting.mContent = ui->qTableWidget->currentItem()->text();
     setting.mBroadExtIdList = getBroadCastExtensions();
